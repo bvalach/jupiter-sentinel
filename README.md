@@ -1,154 +1,220 @@
-# Sentinel
+<div align="center">
 
-Portable multi-agent security sentinel for personal servers and workstations.
-
-This public prototype is intentionally generic:
-- no personal paths
-- no site-specific logic
-- no production database dependency
-- no API-key requirement for the model CLIs
-
-The intended setup is local OAuth/session login for Claude Code and Codex.
-
-## Architecture
-
-```text
-cron ──→ scanner/scan.sh        (deterministic host evidence, structured summary)
-          │
-          ├──→ Claude           (threat intel against recent advisories/news)
-          │
-          ├──→ Codex            (forensic posture review from captured evidence)
-          │
-          └──→ Claude           (merge, prioritize, report)
-                    ↓
-               local history + optional notification
+```
+  ___  ____  _  _  ____  ____  _  _  ____  __   
+ / __)( ___)( \( )(_  _)(_  _)( \( )( ___)(  )  
+ \__ \ )__)  )  (   )(   _)(_  )  (  )__)  )(__ 
+ (___/(____)(_)\_) (__) (____)(_)\_)(____)(____) 
 ```
 
-## Design Principles
+**Multi-agent security sentinel for personal servers and workstations.**
 
-- The scanner is the only phase that touches the host directly.
-- Models read audit artifacts, not the live machine.
-- History is local JSONL by default, so the prototype stays portable.
-- Every AI phase can fail independently without collapsing the whole run.
-- OAuth-backed CLIs are assumed; API keys are optional and not required.
+*One cron job. Three AI analysts. Zero API keys required.*
 
-## What It Scans
+`scanner` **>>** `Claude (threat intel)` **>>** `Codex (forensics)` **>>** `Claude (report)` **>>** `history`
 
-| Signal | Default source |
-|--------|----------------|
-| Pending OS package updates | `apt` on Linux, `brew outdated` on macOS when available |
-| Local CVE hints | `debsecan` on Debian/Ubuntu when installed |
-| Listening services | `ss` or `lsof` |
-| Recent failed logins | `journalctl` / `auth.log` when available |
+---
+
+[MIT License](LICENSE) / Linux & macOS / Python 3 / Claude Code + Codex CLI
+
+</div>
+
+---
+
+## How it works
+
+Sentinel runs a **deterministic scanner** that collects host evidence, then hands that evidence to **two AI analysts** that can't touch your machine directly. A final AI pass merges everything into a prioritized operator briefing.
+
+```
+                         +------------------+
+                         |    cron / manual  |
+                         +--------+---------+
+                                  |
+                    +-------------v--------------+
+                    |   Phase 1: Scanner (bash)  |
+                    |   Deterministic evidence    |
+                    |   collection from the host  |
+                    +-------------+--------------+
+                                  |
+                          scan-summary.json
+                                  |
+                  +---------------+---------------+
+                  |                               |
+     +------------v-----------+    +--------------v-----------+
+     | Phase 2: Claude Opus   |    | Phase 3: Codex o3        |
+     | Threat intelligence    |    | Forensic posture review  |
+     | WebSearch + WebFetch   |    | Internal config analysis |
+     +------------+-----------+    +--------------+-----------+
+                  |                               |
+         opus-findings.json             codex-findings.json
+                  |                               |
+                  +---------------+---------------+
+                                  |
+                   +--------------v--------------+
+                   | Phase 4: Claude Sonnet      |
+                   | Merge, deduplicate,         |
+                   | prioritize, write report    |
+                   +--------------+--------------+
+                                  |
+                     report.md + summary.json
+                                  |
+                  +---------------+---------------+
+                  |                               |
+        +---------v---------+         +-----------v----------+
+        | Phase 5: History  |         | Phase 6: Notify      |
+        | Local JSONL store |         | Telegram (optional)  |
+        +-------------------+         +----------------------+
+```
+
+## Design principles
+
+| Principle | Why |
+|-----------|-----|
+| **Scanner = only host contact** | AI phases read artifacts, never the live machine |
+| **Graceful degradation** | Each AI phase can fail independently without collapsing the run |
+| **No API keys needed** | Uses locally authenticated CLI sessions (OAuth/session login) |
+| **Portable by default** | Local JSONL history, no database, no site-specific logic |
+| **Structured output** | JSON schema for all findings, machine-readable summaries |
+
+## What it scans
+
+<details>
+<summary><strong>15 signal categories</strong> (click to expand)</summary>
+
+| Signal | Source |
+|--------|--------|
+| Pending OS updates | `apt` / `brew outdated` |
+| Local CVE hints | `debsecan` (Debian/Ubuntu) |
+| Listening services | `ss` / `lsof` |
+| Failed logins | `journalctl` / `auth.log` |
 | File integrity drift | SHA-256 checksum baseline |
-| Docker posture | `docker images`, `docker ps`, `docker inspect` |
+| Docker posture | `docker images` / `ps` / `inspect` |
 | SUID/SGID binaries | `find` |
-| World-writable files in sensitive paths | `find` |
+| World-writable files | `find` on sensitive paths |
 | Root-owned processes | `ps aux` |
-| Firewall evidence | `nft` or `iptables` when available |
-| SSH baseline | `sshd -T` or relevant config lines |
-| Cron visibility | `crontab -l` and `/etc/cron*` |
-| Repo secret heuristics | deterministic regex scan over configured project paths |
-| Recent external threats | Claude with `WebSearch` / `WebFetch` |
-| Internal posture review | Codex over the captured artifacts |
+| Firewall rules | `nft` / `iptables` |
+| SSH baseline | `sshd -T` or config inspection |
+| Cron jobs | `crontab -l` + `/etc/cron*` |
+| Secret heuristics | Regex scan over project paths |
+| External threats | Claude + `WebSearch` / `WebFetch` |
+| Internal posture | Codex forensic analysis |
 
-## Setup
+</details>
+
+## Quick start
+
+```bash
+# 1. Clone
+git clone https://github.com/YOUR_USER/jupiter-sentinel-generic.git
+cd jupiter-sentinel-generic
+
+# 2. Configure
+cp env.example .env
+$EDITOR .env                  # adjust for your machine
+
+# 3. Make executable
+chmod +x run-audit.sh scanner/scan.sh lib/notify.sh
+
+# 4. Run
+./run-audit.sh
+```
 
 ### Prerequisites
 
-```bash
-# Python 3
-# Claude Code CLI authenticated locally
-# Codex CLI authenticated locally
+- **Python 3**
+- **Claude Code CLI** — authenticated locally via OAuth/session
+- **Codex CLI** — authenticated locally via OAuth/session
+- Optional: `debsecan` (Linux CVE hints), Docker, `nftables`/`iptables`, Homebrew (macOS)
 
-# Optional Linux helper
-sudo apt install debsecan
-
-# Optional host tools
-# docker
-# nftables / iptables
-# Homebrew (macOS package visibility)
-```
-
-### Configure
-
-```bash
-cp env.example .env
-# Edit .env for your machine
-```
-
-### Make executable
-
-```bash
-chmod +x run-audit.sh scanner/scan.sh lib/notify.sh
-```
-
-### Cron
+### Schedule it
 
 ```bash
 crontab -e
+# Daily at 06:00
 0 6 * * * /absolute/path/to/run-audit.sh >> /tmp/sentinel.log 2>&1
 ```
 
 ## Usage
 
 ```bash
-./run-audit.sh
-./run-audit.sh --scan-only
-./run-audit.sh --skip-scan
+./run-audit.sh              # Full pipeline: scan + AI analysis + report
+./run-audit.sh --scan-only  # Just the deterministic scanner
+./run-audit.sh --skip-scan  # Reuse existing scan, run AI phases only
 ```
 
-## History Search
+### Search history
 
 ```bash
 python3 lib/store.py search "ssh password authentication"
 python3 lib/store.py search "docker privileged mount" --host workstation-01
 ```
 
-## Directory Structure
+## Project structure
 
-```text
+```
 sentinel/
-├── .gitignore
-├── LICENSE
-├── env.example
-├── run-audit.sh
+├── run-audit.sh                 # Orchestrator: runs all phases sequentially
 ├── scanner/
-│   └── scan.sh
+│   └── scan.sh                  # Phase 1: deterministic host evidence collector
 ├── prompts/
-│   ├── threat-intel.md
-│   ├── forensic-audit.md
-│   └── merge-report.md
+│   ├── threat-intel.md          # Phase 2 prompt: Claude threat intelligence
+│   ├── forensic-audit.md        # Phase 3 prompt: Codex forensic review
+│   └── merge-report.md          # Phase 4 prompt: Claude merge & report
 ├── lib/
-│   ├── build_scan_summary.py
-│   ├── store.py
-│   ├── notify.sh
+│   ├── build_scan_summary.py    # Builds structured JSON from raw scan artifacts
+│   ├── store.py                 # JSONL history: store & search
+│   ├── notify.sh                # Optional Telegram notification
 │   └── requirements.txt
 ├── schema/
-│   └── finding.schema.json
-├── daily/
+│   └── finding.schema.json      # JSON Schema for all findings
+├── daily/                       # Output: one folder per day
 │   └── YYYYMMDD/
-│       ├── raw/
-│       ├── scan-summary.json
-│       ├── opus-findings.json
-│       ├── codex-findings.json
-│       ├── summary.json
-│       └── report.md
-└── history/
-    └── summaries.jsonl
+│       ├── raw/                 #   Raw scan artifacts
+│       ├── scan-summary.json    #   Structured scanner output
+│       ├── opus-findings.json   #   Claude threat intel findings
+│       ├── codex-findings.json  #   Codex forensic findings
+│       ├── summary.json         #   Merged machine-readable summary
+│       └── report.md            #   Human-readable operator briefing
+├── history/
+│   └── summaries.jsonl          # Append-only audit history
+├── env.example                  # Template configuration
+├── AGENTS.md                    # AI agent roles and coordination
+└── LICENSE                      # MIT
 ```
 
-## Configuration Notes
+## Configuration
 
-- `PROJECT_PATHS` is a comma-separated list of directories to inspect for manifests, `.env` files, and secret-like patterns.
-- `CHECKSUM_FILES` is a colon-separated list of tracked files.
-- `SUID_SCAN_PATHS` and `WORLD_WRITABLE_PATHS` are colon-separated path lists.
-- `RUN_NETWORK_AUDITS=false` by default to keep the public prototype deterministic and portable.
-- Notification is optional and disabled by default.
+All settings live in `.env` (copied from `env.example`):
 
-## Notes
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AUDIT_DIR` | Output directory for daily audits | `daily` |
+| `HOSTNAME_LABEL` | Host label in reports | `hostname -s` |
+| `CLAUDE_MODEL_INTEL` | Model for threat intel phase | `opus` |
+| `CLAUDE_MODEL_MERGE` | Model for merge/report phase | `sonnet` |
+| `CODEX_MODEL` | Model for forensic phase | `o3` |
+| `ENABLE_THREAT_INTEL` | Toggle Phase 2 | `true` |
+| `ENABLE_FORENSIC_AUDIT` | Toggle Phase 3 | `true` |
+| `ENABLE_MERGE_REPORT` | Toggle Phase 4 | `true` |
+| `PROJECT_PATHS` | Comma-separated dirs for secret scanning | *(empty)* |
+| `CHECKSUM_FILES` | Colon-separated files for integrity checks | `/etc/passwd:/etc/group:...` |
+| `RUN_NETWORK_AUDITS` | Enable network-level audits | `false` |
+| `ENABLE_NOTIFICATIONS` | Telegram alerts | `false` |
 
-- This repository intentionally contains no personal defaults or site-specific logic.
-- The scanner may show blind spots when a command is unavailable or lacks privileges. Those blind spots are preserved in `scan-summary.json`.
-- Threat intel and forensic phases are expected to run through locally authenticated CLI sessions.
-- If a model phase fails because OAuth expired or a CLI is unavailable, Sentinel degrades gracefully and keeps the scan artifacts.
+## How it degrades
+
+Sentinel is built to keep working when things break:
+
+- **CLI not installed?** Phase writes a `degraded` stub, pipeline continues.
+- **OAuth expired?** Same: stub + graceful skip.
+- **Scanner tool missing?** Blind spot recorded in `scan-summary.json`, not silently ignored.
+- **No findings?** Report says "ALL CLEAR" in 5 lines.
+- **Yesterday's data missing?** Delta comparison skipped, no crash.
+
+---
+
+<div align="center">
+
+*Built for operators who want to sleep well.*
+
+</div>
