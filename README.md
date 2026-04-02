@@ -41,7 +41,7 @@ Sentinel runs a **deterministic scanner** that collects host evidence, then hand
                   +---------------+---------------+
                   |                               |
      +------------v-----------+    +--------------v-----------+
-     | Phase 2: Claude Opus   |    | Phase 3: Codex o3        |
+     | Phase 2: Claude Opus   |    | Phase 3: Codex        |
      | Threat intelligence    |    | Forensic posture review  |
      | WebSearch + WebFetch   |    | Internal config analysis |
      +------------+-----------+    +--------------+-----------+
