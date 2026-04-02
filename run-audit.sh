@@ -90,7 +90,7 @@ CLAUDE_CLI="${CLAUDE_CLI:-claude}"
 CODEX_CLI="${CODEX_CLI:-codex}"
 CLAUDE_MODEL_INTEL="${CLAUDE_MODEL_INTEL:-opus}"
 CLAUDE_MODEL_MERGE="${CLAUDE_MODEL_MERGE:-sonnet}"
-CODEX_MODEL="${CODEX_MODEL:-o3}"
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.4}"
 MAX_TURNS_INTEL="${MAX_TURNS_INTEL:-12}"
 MAX_TURNS_MERGE="${MAX_TURNS_MERGE:-8}"
 ENABLE_THREAT_INTEL="${ENABLE_THREAT_INTEL:-true}"
@@ -204,7 +204,13 @@ elif ! can_run_binary "$CODEX_CLI"; then
   write_findings_stub "${OUT}/codex-findings.json" "codex" "codex cli not available"
   record_phase "forensic-audit" "skipped" "codex cli missing"
 else
-  if "${CODEX_CLI}" --model "${CODEX_MODEL}" --full-auto "${PROMPT_FORENSIC}" \
+  if printf '%s\n' "${PROMPT_FORENSIC}" | "${CODEX_CLI}" exec \
+    --model "${CODEX_MODEL}" \
+    --full-auto \
+    --skip-git-repo-check \
+    --color never \
+    --cd "${OUT}" \
+    - \
     > >(tee "${OUT}/codex-phase.log") 2>&1; then
     if [ -s "${OUT}/codex-findings.json" ]; then
       record_phase "forensic-audit" "ok" "findings created"
