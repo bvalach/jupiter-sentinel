@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sentinel Finding",
+  "description": "Schema for individual security findings produced by Sentinel analysts or deterministic scanner rules",
+  "type": "object",
+  "required": ["id", "severity", "category", "title", "description", "recommendation", "requires_action"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique finding ID. Format: OPUS-NNN, CDX-NNN, or SCAN-NNN",
+      "pattern": "^(OPUS|CDX|SCAN)-\\d{3}$"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low", "info"]
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "cve",
+        "supply-chain",
+        "brute-force",
+        "integrity",
+        "config",
+        "dependency",
+        "permissions",
+        "process",
+        "network",
+        "docker",
+        "credentials",
+        "ssh",
+        "package"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "package_or_system": {
+      "type": ["string", "null"]
+    },
+    "cve_id": {
+      "type": ["string", "null"],
+      "pattern": "^CVE-\\d{4}-\\d{4,}$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "evidence": {
+      "type": ["string", "null"]
+    },
+    "recommendation": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": ["string", "null"],
+      "format": "uri"
+    },
+    "requires_action": {
+      "type": "boolean"
+    }
+  }
+}

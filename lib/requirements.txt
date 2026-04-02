@@ -1,0 +1,2 @@
+# No mandatory Python dependencies for the default public prototype.
+# Optional integrations can add their own requirements later.
